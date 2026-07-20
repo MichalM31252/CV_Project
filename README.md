@@ -3,8 +3,7 @@
 ## Overview
 
 An end-to-end machine learning system that predicts whether a credit-card client
-will default next month, built the way it would be built for production rather
-than as a notebook. It covers every stage: **ingest → warehouse → SQL features →
+will default next month. It covers every stage: **ingest → warehouse → SQL features →
 train → calibrate → decide → serve → monitor**, plus infrastructure as code and
 CI.
 
