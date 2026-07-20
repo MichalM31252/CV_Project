@@ -1,15 +1,29 @@
 # Credit default risk pipeline.
 # `make help` lists the targets.
+#
+# Portability note: Make chooses its own shell - /bin/sh on macOS and Linux,
+# cmd.exe on Windows unless a POSIX sh is on PATH. So no recipe here may rely on
+# shell builtins or Unix tools. Two consequences:
+#
+#   * environment variables are set with Make's `export`, never with a
+#     `VAR=value command` prefix (that syntax is POSIX-shell only and fails
+#     under cmd.exe);
+#   * targets that would otherwise need grep/awk/rm/find delegate to
+#     scripts/devtools.py.
+#
+# The result is that every target below works identically from bash, zsh,
+# PowerShell and cmd.
 
 .PHONY: help setup pipeline ingest features train train-sklearn train-torch \
         serve test lint format docker-build docker-run drift clean deploy-info
 
 PYTHON      ?= python
+
+# Exported by Make itself, so it reaches the recipe regardless of shell.
 export PYTHONPATH = src
 
 help: ## Show available targets
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+	@$(PYTHON) scripts/devtools.py help
 
 setup: ## Install dependencies
 	$(PYTHON) -m pip install -r requirements-dev.txt
@@ -35,19 +49,22 @@ train-torch: ## Train only the PyTorch model
 drift: ## Compare served predictions against the training baseline
 	$(PYTHON) -m credit_risk.pipeline --stage drift
 
-serve: ## Run the API locally on :8080
-	CR_PLAIN_LOGS=1 $(PYTHON) -m uvicorn credit_risk.serving.app:app --reload --port 8080
+# Human-readable console logs instead of the Cloud Logging JSON format.
+# Set through Make's export rather than a shell prefix - see the note above.
+serve: export CR_PLAIN_LOGS = 1
+serve: ## Run the API locally on :8080 (docs at /docs)
+	$(PYTHON) -m uvicorn credit_risk.serving.app:app --reload --port 8080
 
 test: ## Run the test suite
 	$(PYTHON) -m pytest -v -m "not gcp"
 
 lint: ## Check formatting and lint rules
-	ruff check src tests
-	ruff format --check src tests
+	$(PYTHON) -m ruff check src tests scripts
+	$(PYTHON) -m ruff format --check src tests scripts
 
 format: ## Apply formatting and safe lint fixes
-	ruff format src tests
-	ruff check --fix src tests
+	$(PYTHON) -m ruff format src tests scripts
+	$(PYTHON) -m ruff check --fix src tests scripts
 
 docker-build: ## Build the serving image
 	docker build -f docker/Dockerfile -t credit-risk-api:local .
@@ -56,15 +73,7 @@ docker-run: ## Run the serving image locally on :8080
 	docker run --rm -p 8080:8080 -e PORT=8080 credit-risk-api:local
 
 deploy-info: ## Print the GCP deployment sequence
-	@echo "1. cd terraform && cp terraform.tfvars.example terraform.tfvars   # fill in project_id"
-	@echo "2. terraform init && terraform apply"
-	@echo "3. gcloud auth configure-docker \$$(terraform output -raw artifact_registry | cut -d/ -f1)"
-	@echo "4. docker build -f docker/Dockerfile -t \$$(terraform output -raw artifact_registry)/api:v1 ."
-	@echo "5. docker push \$$(terraform output -raw artifact_registry)/api:v1"
-	@echo "6. terraform apply   # rolls the service onto the new image"
-	@echo "7. curl \$$(terraform output -raw service_url)/health"
+	@$(PYTHON) scripts/devtools.py deploy-info
 
-clean: ## Remove generated data, models and reports
-	rm -rf data/raw/*.parquet data/processed/* data/models/* reports/*.md reports/*.json
-	find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
-	rm -rf .pytest_cache .ruff_cache
+clean: ## Remove generated data, models, reports and caches
+	@$(PYTHON) scripts/devtools.py clean
