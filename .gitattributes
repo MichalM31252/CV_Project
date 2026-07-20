@@ -1,0 +1,22 @@
+# Normalise line endings so the repository stays LF regardless of the platform
+# it is edited on. Without this, editing on Windows produces CRLF churn that
+# shows up as "every line changed" in a diff.
+* text=auto eol=lf
+
+# Windows batch files genuinely require CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary: never touch, never diff as text.
+*.parquet binary
+*.duckdb  binary
+*.joblib  binary
+*.pt      binary
+*.xls     binary
+*.zip     binary
+*.png     binary
+
+# Language hints so GitHub reports the repository as Python rather than counting
+# generated reports and HCL toward the language breakdown.
+*.sql linguist-language=SQL
+reports/* linguist-documentation

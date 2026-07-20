@@ -185,15 +185,19 @@ def write_report(settings: Settings, outcomes: dict[str, Any], test_df: pd.DataF
         lines.append("")
 
     report_path = REPORTS_DIR / "model_report.md"
-    report_path.write_text("\n".join(lines), encoding="utf-8")
+    # newline="\n" disables Windows CRLF translation. These files are committed,
+    # so without it the same pipeline run produces a different diff per platform.
+    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
     metrics_path = REPORTS_DIR / "metrics.json"
     metrics_path.write_text(
         json.dumps(
             {flavor: outcome["test_metrics"] for flavor, outcome in outcomes.items()},
             indent=2,
-        ),
+        )
+        + "\n",
         encoding="utf-8",
+        newline="\n",
     )
     logger.info("report written", extra={"path": str(report_path)})
     return report_path

@@ -59,3 +59,4 @@ Operating point as the false-negative : false-positive cost ratio varies.
 |            15 |      0.1017 |          83   |   0.9704 |      0.2636 |           7.5 |
 |            20 |      0.1017 |          83   |   0.9704 |      0.2636 |           3.7 |
 |            30 |      0      |         100   |   1      |      0.2256 |           0   |
+

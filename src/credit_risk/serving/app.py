@@ -249,7 +249,9 @@ async def predict_batch(request: BatchPredictionRequest) -> BatchPredictionRespo
     settings = get_settings()
     if len(request.records) > settings.serving.max_batch_size:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            # 413 Content Too Large. Starlette renamed the constant; the older
+            # HTTP_413_REQUEST_ENTITY_TOO_LARGE spelling is deprecated.
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=(
                 f"batch of {len(request.records)} exceeds max_batch_size "
                 f"{settings.serving.max_batch_size}"

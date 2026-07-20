@@ -115,7 +115,11 @@ def save_model(
     local_artifact = staging / artifact_name
     local_metadata = staging / metadata_name
     joblib.dump(model, local_artifact)
-    local_metadata.write_text(json.dumps(metadata, indent=2, default=str), encoding="utf-8")
+    local_metadata.write_text(
+        json.dumps(metadata, indent=2, default=str) + "\n",
+        encoding="utf-8",
+        newline="\n",  # keep artifacts byte-identical across platforms
+    )
 
     # Immutable versioned copy first, then the mutable "latest" pointer, so a
     # crash between the two can never leave `latest` referring to nothing.
