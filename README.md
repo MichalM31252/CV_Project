@@ -476,5 +476,3 @@ Honest gaps, in the order I would address them.
   for the predictive accuracy of probability of default of credit card clients.*
   Expert Systems with Applications, 36(2), 2473–2480.
 - Dataset: [UCI Machine Learning Repository #350](https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients)
-#   C V _ P r o j e c t  
- 
