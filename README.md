@@ -1,23 +1,62 @@
 # Credit Default Risk — End-to-End ML Pipeline on GCP
 
-Production-shaped machine learning pipeline that predicts credit-card default one
-month ahead: warehouse ingestion, SQL feature engineering, two model
-implementations, a calibrated cost-optimised decision policy, a containerised
-prediction API for Cloud Run, drift monitoring, infrastructure as code and CI.
+## Overview
 
-**Dataset:** [UCI #350 — Default of Credit Card Clients](https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients)
-(Yeh & Lien, 2009) — 30,000 Taiwanese credit-card accounts, April–September 2005,
-22.1% default rate.
+An end-to-end machine learning system that predicts whether a credit-card client
+will default next month, built the way it would be built for production rather
+than as a notebook. It covers every stage: **ingest → warehouse → SQL features →
+train → calibrate → decide → serve → monitor**, plus infrastructure as code and
+CI.
+
+**Data:** [UCI #350](https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients)
+(Yeh & Lien, 2009) — 30,000 Taiwanese accounts, April–September 2005, 22.1% default rate.
+
+| Stage | What happens | Tech |
+|---|---|---|
+| 1 · Ingest | Download, SHA-256 verify, stage as Parquet, load to warehouse | GCS / filesystem |
+| 2 · Features | 32 features + deterministic 70/15/15 split, defined **once in SQL** | BigQuery / DuckDB |
+| 3 · Train | LogReg + HistGradientBoosting, and a PyTorch MLP wrapped as a sklearn estimator | scikit-learn, PyTorch |
+| 4 · Decide | Isotonic calibration, then a threshold chosen to minimise **expected cost**, not maximise accuracy | — |
+| 5 · Serve | REST API taking **raw** account fields; runs the same feature SQL in-process | FastAPI, DuckDB, Cloud Run |
+| 6 · Monitor | Prediction log + PSI input drift vs training baseline, alerting on shift | BigQuery, Cloud Logging |
+
+**Headline results** (held-out test set, touched once): ROC-AUC **0.789**,
+PR-AUC **0.538**, and a decision policy that cuts expected loss **27%** versus the
+best trivial baseline. The PyTorch net did *not* beat gradient boosting — that is
+reported, not hidden.
+
+**Three ideas hold it together:**
+
+1. **One definition of a feature.** The same `sql/*.sql` files run in the
+   warehouse during training and inside the API at request time, so
+   training/serving skew is structurally impossible, not merely unlikely.
+2. **Two backends, one codebase.** `backend: local` (DuckDB + filesystem) and
+   `backend: gcp` (BigQuery + Cloud Storage) sit behind one interface — so the
+   whole thing runs on any laptop with no cloud account, while the GCP path stays
+   real SDK code.
+3. **A decision, not a score.** Predicting "nobody defaults" scores 78% accuracy
+   and is worthless; the pipeline optimises the cost of the two errors instead.
+
+> **Status:** validated end-to-end locally. The GCP path (`terraform/`, BigQuery
+> and GCS clients) is written and reviewable but has **never been applied against
+> a live billing account** — see [Deploying to GCP](#deploying-to-gcp).
+
+### How to use it
 
 ```bash
 git clone <this-repo> && cd credit-default-risk
 pip install -r requirements-dev.txt
-make pipeline          # ingest -> SQL features -> train -> evaluate -> register
-make serve             # http://localhost:8080/docs
+
+make pipeline        # ingest -> features -> train -> evaluate -> register  (~25 s)
+make test            # 66 tests, no cloud credentials, no network
+make serve           # API on :8080 — interactive docs at /docs
 ```
 
-The whole pipeline runs locally in about 25 seconds with **no GCP account, no
-credentials and no cost** — see [Two backends, one codebase](#two-backends-one-codebase).
+Then POST raw client fields to `/predict` and get back a calibrated probability,
+the cost-optimal threshold, a `flag` / `no_flag` decision and a risk band — see
+[Running it](#running-it) for a worked request. Everything above costs **nothing
+and needs no GCP account**; adding `CR__BACKEND=gcp` is the only change needed to
+run the identical code against BigQuery and Cloud Storage.
 
 ---
 
@@ -302,6 +341,7 @@ than a mock.
 │   ├── serving/                # FastAPI, pydantic schemas, predictor
 │   └── monitoring/             # prediction log, PSI drift
 ├── tests/                      # 66 tests, no cloud credentials needed
+├── scripts/devtools.py         # cross-platform Makefile helpers
 ├── docker/Dockerfile           # multi-stage, non-root, CPU-only torch
 ├── terraform/                  # BigQuery, GCS, Cloud Run, IAM, alerts
 └── .github/workflows/ci.yml    # lint, test matrix, e2e pipeline, image build
