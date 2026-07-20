@@ -16,7 +16,7 @@ CI.
 | 2&nbsp;·&nbsp;Features | 32 features + deterministic 70/15/15 split, defined **once in SQL** | BigQuery / DuckDB |
 | 3&nbsp;·&nbsp;Train | LogReg + HistGradientBoosting, and a PyTorch MLP wrapped as a sklearn estimator | scikit-learn, PyTorch |
 | 4&nbsp;·&nbsp;Decide | Isotonic calibration, then a threshold chosen to minimise **expected cost**, not maximise accuracy | — |
-| 5&nbsp;·&nbsp;Serve | REST API taking **raw** account fields; runs the same feature SQL in-process | FastAPI, DuckDB, Cloud Run |
+| 5&nbsp;·&nbsp;Serve | REST API taking **raw** account fields, runs the same feature SQL in-process | FastAPI, DuckDB, Cloud Run |
 | 6&nbsp;·&nbsp;Monitor | Prediction log + PSI input drift vs training baseline, alerting on shift | BigQuery, Cloud Logging |
 
 **Headline results** (held-out test set, touched once): ROC-AUC **0.789**,
@@ -33,7 +33,7 @@ best trivial baseline. The PyTorch net did *not* beat gradient boosting.
    whole thing runs on any laptop with no cloud account, while the GCP path stays
    real SDK code.
 3. **A decision, not a score.** Predicting "nobody defaults" scores 78% accuracy
-   and is worthless; the pipeline optimises the cost of the two errors instead.
+   and is worthless. The pipeline optimises the cost of the two errors instead.
 
 > **Status:** validated end-to-end locally. The GCP path (`terraform/`, BigQuery
 > and GCS clients) is written and reviewable but has **never been applied against
@@ -53,7 +53,7 @@ make serve           # API on :8080 — interactive docs at /docs
 Then POST raw client fields to `/predict` and get back a calibrated probability,
 the cost-optimal threshold, a `flag` / `no_flag` decision and a risk band — see
 [Running it](#running-it) for a worked request. Everything above costs **nothing
-and needs no GCP account**; adding `CR__BACKEND=gcp` is the only change needed to
+and needs no GCP account**. Adding `CR__BACKEND=gcp` is the only change needed to
 run the identical code against BigQuery and Cloud Storage.
 
 ---
@@ -171,7 +171,7 @@ the pipeline optimises expected cost:
 The threshold is derived from a cost matrix grounded in the data — median balance
 at default is NT$20,185, so loss given default ≈ NT$16,000 at a 20% recovery rate
 — not chosen at 0.5 by default. The implied boundary is
-`p* = FP / ((FN − TP) + FP) = 0.171`; the empirical optimum found on validation
+`p* = FP / ((FN − TP) + FP) = 0.171`. The empirical optimum found on validation
 was **0.182**. `reports/model_report.md` includes a sensitivity sweep showing how
 the operating point moves if Risk disagrees with those figures.
 
@@ -241,7 +241,7 @@ months 2–6. Those accounts default at **31.6% against a 22.1% base rate** — 
 absence of billing history is itself a risk signal. Rather than filling it with
 zero (which would assert "paid nothing against a bill" and destroy the signal),
 the NULL is preserved and a `has_billing_history` flag makes it explicit.
-Gradient boosting consumes the NULL natively; logistic regression gets a median
+Gradient boosting consumes the NULL natively. Logistic regression gets a median
 fill plus the flag.
 
 ### 4. Deterministic hash-based splitting
@@ -267,8 +267,8 @@ further, so raw outputs are not probabilities. The winner is frozen
 validation, and only then thresholded.
 
 Three splits, each with exactly one job: hyperparameters are searched with
-cross-validation inside **train**; calibration and threshold are fitted on
-**valid**; **test** is touched once. Selecting a threshold on test is the most
+cross-validation inside **train**. Calibration and threshold are fitted on
+**valid**, **test** is touched once. Selecting a threshold on test is the most
 common way portfolio projects quietly overstate their results.
 
 ### 6. The API takes raw data, not features
@@ -309,7 +309,7 @@ CR__BACKEND=gcp CR__GCP__PROJECT_ID=my-project make pipeline
 ```
 
 The SQL is restricted to constructs both engines share — no `SAFE_DIVIDE`, no
-`FARM_FINGERPRINT`, no `FLOAT64`/`DOUBLE` casts; division guards use the portable
+`FARM_FINGERPRINT`, no `FLOAT64`/`DOUBLE` casts. Division guards use the portable
 `x / NULLIF(y, 0)` form. This means anyone can clone the repo and run the whole
 thing, CI needs no cloud credentials, and the GCP path is real SDK code rather
 than a mock.
