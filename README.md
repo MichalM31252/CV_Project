@@ -12,12 +12,12 @@ CI.
 
 | Stage | What happens | Tech |
 |---|---|---|
-| 1 · Ingest | Download, SHA-256 verify, stage as Parquet, load to warehouse | GCS / filesystem |
-| 2 · Features | 32 features + deterministic 70/15/15 split, defined **once in SQL** | BigQuery / DuckDB |
-| 3 · Train | LogReg + HistGradientBoosting, and a PyTorch MLP wrapped as a sklearn estimator | scikit-learn, PyTorch |
-| 4 · Decide | Isotonic calibration, then a threshold chosen to minimise **expected cost**, not maximise accuracy | — |
-| 5 · Serve | REST API taking **raw** account fields; runs the same feature SQL in-process | FastAPI, DuckDB, Cloud Run |
-| 6 · Monitor | Prediction log + PSI input drift vs training baseline, alerting on shift | BigQuery, Cloud Logging |
+| 1&nbsp;·&nbsp;Ingest | Download, SHA-256 verify, stage as Parquet, load to warehouse | GCS / filesystem |
+| 2&nbsp;·&nbsp;Features | 32 features + deterministic 70/15/15 split, defined **once in SQL** | BigQuery / DuckDB |
+| 3&nbsp;·&nbsp;Train | LogReg + HistGradientBoosting, and a PyTorch MLP wrapped as a sklearn estimator | scikit-learn, PyTorch |
+| 4&nbsp;·&nbsp;Decide | Isotonic calibration, then a threshold chosen to minimise **expected cost**, not maximise accuracy | — |
+| 5&nbsp;·&nbsp;Serve | REST API taking **raw** account fields; runs the same feature SQL in-process | FastAPI, DuckDB, Cloud Run |
+| 6&nbsp;·&nbsp;Monitor | Prediction log + PSI input drift vs training baseline, alerting on shift | BigQuery, Cloud Logging |
 
 **Headline results** (held-out test set, touched once): ROC-AUC **0.789**,
 PR-AUC **0.538**, and a decision policy that cuts expected loss **27%** versus the
