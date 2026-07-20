@@ -1,0 +1,50 @@
+{
+  "sklearn": {
+    "n": 4500,
+    "positive_rate": 0.22555555555555556,
+    "threshold": 0.18181818181818182,
+    "roc_auc": 0.7894226487903824,
+    "pr_auc": 0.5376617908889423,
+    "brier": 0.13723201157601914,
+    "accuracy": 0.6484444444444445,
+    "precision": 0.36917397323488693,
+    "recall": 0.7881773399014779,
+    "f1": 0.502828409805154,
+    "confusion": {
+      "tn": 2118,
+      "fp": 1367,
+      "fn": 215,
+      "tp": 800
+    },
+    "total_cost": 8741000.0,
+    "cost_per_client": 1942.4444444444443,
+    "baseline_intervene_none": 16240000.0,
+    "baseline_intervene_all": 11977500.0,
+    "savings_vs_best_baseline": 3236500.0,
+    "savings_pct": 27.021498643289497
+  },
+  "torch": {
+    "n": 4500,
+    "positive_rate": 0.22555555555555556,
+    "threshold": 0.1785714328289032,
+    "roc_auc": 0.7846008580051028,
+    "pr_auc": 0.5383165377667127,
+    "brier": 0.1367083128795933,
+    "accuracy": 0.6375555555555555,
+    "precision": 0.3627450980392157,
+    "recall": 0.8019704433497536,
+    "f1": 0.49953973611537283,
+    "confusion": {
+      "tn": 2055,
+      "fp": 1430,
+      "fn": 201,
+      "tp": 814
+    },
+    "total_cost": 8727000.0,
+    "cost_per_client": 1939.3333333333333,
+    "baseline_intervene_none": 16240000.0,
+    "baseline_intervene_all": 11977500.0,
+    "savings_vs_best_baseline": 3250500.0,
+    "savings_pct": 27.138384470882905
+  }
+}

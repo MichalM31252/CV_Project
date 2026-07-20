@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A newer push makes an in-flight run obsolete.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: src
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install ruff==0.14.4
+      - run: ruff check src tests
+      - run: ruff format --check src tests
+
+  test:
+    name: Tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Lower bound is what the container runs; upper bound is the dev
+        # environment. Testing both catches version-specific breakage early.
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        # CPU-only torch: the CUDA wheel is several GB and would dominate CI time.
+        run: |
+          pip install torch==2.12.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements-dev.txt
+
+      - name: Run tests
+        # The whole suite runs on the DuckDB backend, so CI needs no GCP
+        # credentials and no billing account. Tests marked `gcp` are excluded.
+        run: pytest -v -m "not gcp" --junitxml=junit.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.python-version }}
+          path: junit.xml
+
+  pipeline:
+    name: End-to-end pipeline
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install torch==2.12.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+
+      - name: Run full pipeline
+        # Proves the pipeline actually executes end to end - ingest, SQL feature
+        # build, training, evaluation - not merely that its units pass in isolation.
+        run: python -m credit_risk.pipeline --stage all
+
+      - name: Upload model report
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-report
+          path: reports/
+
+  docker:
+    name: Build container
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          # Build only. Pushing to Artifact Registry requires Workload Identity
+          # Federation, which is configured per-project; see README.
+          push: false
+          tags: credit-risk-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

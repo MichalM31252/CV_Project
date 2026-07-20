@@ -1,0 +1,18 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+
+project_id      = "my-gcp-project-id"
+region          = "europe-west1"
+environment     = "dev"
+
+# Push an image first, then reference it here:
+#   gcloud auth configure-docker europe-west1-docker.pkg.dev
+#   docker build -f docker/Dockerfile -t europe-west1-docker.pkg.dev/my-gcp-project-id/credit-risk/api:v1 .
+#   docker push europe-west1-docker.pkg.dev/my-gcp-project-id/credit-risk/api:v1
+container_image = "europe-west1-docker.pkg.dev/my-gcp-project-id/credit-risk/api:v1"
+
+# Scale to zero keeps an idle deployment free; raise to 1 to remove cold starts.
+min_instances = 0
+max_instances = 4
+
+# Leave true for a public portfolio demo; set false for anything real.
+allow_public_access = true

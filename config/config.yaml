@@ -1,0 +1,137 @@
+# ---------------------------------------------------------------------------
+# Credit Default Risk pipeline - central configuration.
+#
+# Every value here can be overridden by an environment variable using a
+# double-underscore path syntax, e.g.
+#     CR__BACKEND=gcp
+#     CR__GCP__PROJECT_ID=my-project
+# This keeps local runs, CI and Cloud Run driven by the same file.
+# ---------------------------------------------------------------------------
+
+# "local" runs the whole pipeline on DuckDB + the local filesystem.
+# "gcp"   runs the identical pipeline on BigQuery + Cloud Storage.
+backend: local
+
+project_name: credit-default-risk
+
+gcp:
+  project_id: null            # required when backend=gcp
+  region: europe-west1
+  bq_dataset: credit_risk
+  raw_bucket: null            # gs://<raw_bucket>/... required when backend=gcp
+  artifact_bucket: null       # model registry location
+  # Cloud Run / Artifact Registry
+  artifact_repo: credit-risk
+  service_name: credit-risk-api
+
+local:
+  duckdb_path: data/processed/warehouse.duckdb
+  data_dir: data
+  raw_dir: data/raw
+  processed_dir: data/processed
+  model_dir: data/models
+
+data:
+  source_url: https://archive.ics.uci.edu/static/public/350/default+of+credit+card+clients.zip
+  source_member: default of credit card clients.xls
+  # sha256 of the extracted .xls, verified on download to catch silent upstream
+  # drift. Deliberately hashes the member rather than the zip: the archive can be
+  # repacked upstream (timestamps/compression) without the data changing.
+  source_sha256: 30c6be3abd8dcfd3e6096c828bad8c2f011238620f5369220bd60cfc82700933
+  raw_table: raw_credit_default
+  clean_table: clean_credit_default
+  features_table: feature_credit_default
+  predictions_table: prediction_log
+  drift_table: drift_metrics
+
+split:
+  # Deterministic hash-based assignment on client id. Pure integer arithmetic so
+  # BigQuery and DuckDB produce byte-identical splits (no FARM_FINGERPRINT/HASH
+  # dialect divergence). Reruns are stable as the table grows.
+  hash_multiplier: 2654435761   # Knuth multiplicative constant
+  hash_modulus: 100
+  train_max: 69                 # buckets  0-69  -> train (70%)
+  valid_max: 84                 # buckets 70-84  -> valid (15%)
+                                # buckets 85-99  -> test  (15%)
+
+model:
+  target: default_next_month
+  # Protected attribute. Excluded from features by default; still carried through
+  # the feature table so the fairness audit can slice on it.
+  protected_attributes: [sex]
+  exclude_from_features: [client_id, split_name, default_next_month, sex]
+  random_state: 42
+
+  # Business cost matrix, in New Taiwan dollars (2005 values, matching the data).
+  #
+  # These are derived from the dataset rather than invented, so the operating
+  # point can be defended:
+  #
+  #   false_negative  Missed default. Median balance at default is NT$20,185
+  #                   (measured on the clean table). Unsecured card recovery runs
+  #                   ~20%, so loss given default ~= 20,185 * 0.8 ~= 16,000.
+  #                   The median is used rather than the mean (NT$48,509) because
+  #                   the exposure distribution is heavily right-skewed and the
+  #                   mean would let a handful of large accounts set the policy
+  #                   for everyone.
+  #
+  #   true_positive   Correctly flagged. Limit reduction plus collections
+  #                   outreach - operational cost, assumed to avert the write-off.
+  #
+  #   false_positive  Good client wrongly restricted. Lost margin plus elevated
+  #                   churn risk; roughly half a year of the average non-defaulter
+  #                   payment flow (NT$5,828/month).
+  #
+  #   true_negative   No action on a good client. Baseline, so zero by definition.
+  #
+  # The implied decision boundary is
+  #     p* = FP / ((FN - TP) + FP) = 3000 / (14500 + 3000) = 0.171
+  # i.e. intervene once default probability exceeds ~17%. That sits just below the
+  # 22.1% base rate, so the model has to genuinely rank clients rather than flag
+  # everybody. `make sensitivity` sweeps this ratio to show how the operating
+  # point and savings move if Risk disagrees with these figures.
+  cost:
+    false_negative: 16000.0
+    false_positive: 3000.0
+    true_positive: 1500.0
+    true_negative: 0.0
+
+  sklearn:
+    n_iter_search: 25
+    cv_folds: 4
+    calibration_method: isotonic
+
+  torch:
+    hidden_dims: [128, 64]
+    dropout: 0.3
+    lr: 0.001
+    weight_decay: 0.0001
+    batch_size: 512
+    max_epochs: 100
+    patience: 10
+
+serving:
+  model_name: credit_default_classifier
+  # Which trained artifact the API loads: "sklearn" or "torch".
+  model_flavor: sklearn
+  max_batch_size: 500
+
+monitoring:
+  # Population Stability Index thresholds - industry convention.
+  psi_warn: 0.10
+  psi_alert: 0.25
+  # Features tracked for drift. Kept explicit so the monitoring surface is a
+  # deliberate choice rather than "every column we happened to build".
+  tracked_features:
+    - limit_bal
+    - age
+    - avg_utilization
+    - max_delinquency
+    - months_delinquent
+    - avg_payment_ratio
+    - utilization_trend
+
+logging:
+  level: INFO
+  # JSON logs so Cloud Logging parses severity/trace instead of dumping text.
+  json: true

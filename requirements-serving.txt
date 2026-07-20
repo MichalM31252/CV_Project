@@ -1,0 +1,33 @@
+# Serving-only dependencies for the Cloud Run image.
+#
+# Kept separate from requirements.txt because image size drives cold-start
+# latency, and Cloud Run scales to zero - so cold starts are the common case, not
+# the exception. Excluded here: xlrd (ingestion only), google-cloud-bigquery and
+# db-dtypes are kept because the prediction log writes to BigQuery.
+#
+# PyTorch is installed from the CPU-only wheel index. The default wheel bundles
+# CUDA libraries totalling several GB, which are dead weight on Cloud Run where
+# there is no GPU. See docker/Dockerfile for the --index-url that selects it.
+
+numpy==2.4.1
+pandas==2.3.3
+scipy==1.17.0
+scikit-learn==1.8.0
+joblib==1.5.3
+
+# Required by the serving path: the API executes the production feature SQL
+# in-process to guarantee zero training/serving skew.
+duckdb==1.5.4
+pyarrow==25.0.0
+
+# Prediction logging sink.
+google-cloud-bigquery==3.42.2
+google-cloud-logging==3.16.1
+google-cloud-storage==3.13.0
+db-dtypes==1.7.1
+
+fastapi==0.139.2
+uvicorn[standard]==0.51.0
+pydantic==2.13.4
+pydantic-settings==2.14.2
+PyYAML==6.0.3
