@@ -21,8 +21,7 @@ CI.
 
 **Headline results** (held-out test set, touched once): ROC-AUC **0.789**,
 PR-AUC **0.538**, and a decision policy that cuts expected loss **27%** versus the
-best trivial baseline. The PyTorch net did *not* beat gradient boosting — that is
-reported, not hidden.
+best trivial baseline. The PyTorch net did *not* beat gradient boosting.
 
 **Three ideas hold it together:**
 
